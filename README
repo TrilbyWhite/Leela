@@ -1,0 +1,8 @@
+Leela is a CLI frontend to the poppler-glib library of PDF functions.
+
+At present the only functional behaviors are to extract text annotation, get a page count, and extract PDF metadata (as unparsed XML).  Many functions will be added in the comming weeks.
+
+Leela is the offspring of AnnotExtract.  The later was to solve a very specific problem, but in doing so I recognized the opportunity to make a much more powerful yet simple tool.
+
+
+
