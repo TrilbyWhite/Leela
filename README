@@ -1,8 +1,35 @@
 Leela is a CLI frontend to the poppler-glib library of PDF functions.
 
-At present the only functional behaviors are to extract text annotation, get a page count, and extract PDF metadata (as unparsed XML).  Many functions will be added in the comming weeks.
+At present the functional behaviors include the following:
+1) extracting (text only) annotations:
+	leela annot filename.pdf
+2) reporting metadata:
+	leela data [opt] filename.pdf
+In no options, this prints the full unparsed xml metadata from the pdf.
+The following options print only the relevant field:
+	title, author, subject, keywords, creator, producer, created, modified
+All options depend on propper metadata being embedded in the file or they will return an empty string.  Pdfs with this meta data properly set are sadly few and far between; but now whenever it becomes the norm, you'll have a tool to access it!
+3) getting a page count:
+	leela page ? filename.pdf
+4) splitting, joining, and reordering pages:
+	leela page 3 1 2 5 filename.pdf > new.pdf
+5) joining different pdfs by appending one to another:
+	leela append tail.pdf head.pdf
+Note: the filename can be replaced by a "-" to read from stdin.  This is useful for combining commands such as the following example to get annotations only from pages 4 and 5, or joing page 3 from one file to the beginning of another:
+	leela page 4 5 filename.pdf | leela annot -
+	leela page 3 one.pdf | leela append other.pdf - > new.pdf
 
-Leela is the offspring of AnnotExtract.  The later was to solve a very specific problem, but in doing so I recognized the opportunity to make a much more powerful yet simple tool.
+Many functions will be added in the comming weeks.  Feel free to request which functions or abilities you would like prioritized.  Many of the current functions are very "beta".  They work well for me, but as all systems differ, I look forward to hearing how I can make them more robust based on error/bug reports.
 
+Why the name Leela?
+First see how the poppler library got its name:
+http://www.gotfuturama.com/Information/Encyc-41-Popplers/
 
+Leela was for poppler freedom.  Leela was a poppler advocate.  And of course, Leela was the first one to EAT poppler!
+
+Dependencies:
+poppler-glib is the only "formal" dependency.
+ghostscript is currently used for the final conversion from ps to pdf for functions that output a new pdf.
+
+This GS dependency could be replaced by any "drop in" replacement that can take various ps files and output a pdf.  If you wish to compile with alternate ps to pdf rendering, simply define the macro PS2PDF to be a text string for the command using %s where the ps files would go.  See the top of leela.c for an example in the current gs command.
 
