@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <poppler.h>
 
 #ifndef PS2PDF
@@ -20,7 +21,7 @@ PopplerDocument *openPDF(const char *);
 // leela_get_page allows for commands to be strung together
 // in order to restrict on which pages a command is run, eg:
 // $ leela page 1 myPDF.pdf | leela annots -
-callable leela_get_page(int argc, const char **argv) {
+int leela_get_page(int argc, const char **argv) {
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
 	// check page count:
 	if (argv[2][0] == '?') {
@@ -31,7 +32,6 @@ callable leela_get_page(int argc, const char **argv) {
 	char *tmpPS=NULL;
 	tmpPS = (char *) malloc(L_tmpnam);
 	tmpnam(tmpPS);
-	PopplerPage *page;
 	PopplerPSFile *ps = poppler_ps_file_new(PDF,tmpPS,0,argc-3);
 	// loop through pages and render them to the ps file:
 	int i,p;
@@ -49,7 +49,7 @@ callable leela_get_page(int argc, const char **argv) {
 }
 
 // leela_annots extracts annotations from a PDF
-callable leela_annots(int argc, const char **argv) {
+int leela_annots(int argc, const char **argv) {
 	// currently text only
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
 	PopplerPage *page;
@@ -121,7 +121,7 @@ callable leela_annots(int argc, const char **argv) {
 					printf("<%d,%d:3D>",j,i+1); break;
 			}
 			text = poppler_annot_get_contents((PopplerAnnot *)mapping->annot);
-			printf("%s\n",j,i+1,text);
+			printf("%s\n",text);
 			g_free(text);
 		}
 		poppler_page_free_annot_mapping(annots);
@@ -129,9 +129,8 @@ callable leela_annots(int argc, const char **argv) {
 	return 0;
 }
 
-callable leela_text(int argc, const char **argv) {
+int leela_text(int argc, const char **argv) {
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
-	PopplerPage *page;
 	char *text;
 	int i;
 	for (i = 0; i < poppler_document_get_n_pages(PDF); i++) {
@@ -143,7 +142,7 @@ callable leela_text(int argc, const char **argv) {
 }
 
 // leela_append adds one PDF to the end of the other
-callable leela_append(int argc, const char **argv) {
+int leela_append(int argc, const char **argv) {
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
 	PopplerDocument *append = openPDF(argv[2]);
 	int pgs1 = poppler_document_get_n_pages(PDF);
@@ -173,7 +172,7 @@ callable leela_append(int argc, const char **argv) {
 	return 0;
 }
 
-callable leela_get_metadata(int argc, const char **argv) {
+int leela_get_metadata(int argc, const char **argv) {
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
 	gchar *data=NULL;
 	time_t when;
@@ -206,12 +205,12 @@ callable leela_get_metadata(int argc, const char **argv) {
 	return 0;
 }
 
-callable leela_get_images(int argc, const char **argv) {
+int leela_get_images(int argc, const char **argv) {
 	// get all images and send list to stdout?
 	return 0;
 }
 
-callable leela_get_attachment(int argc, const char **argv) {
+int leela_get_attachment(int argc, const char **argv) {
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
 	gboolean has;
 	if (argv[2][0] == '?') {
@@ -226,7 +225,7 @@ callable leela_get_attachment(int argc, const char **argv) {
 
 // leela_help is defined below the command table so
 // it can refer to the table
-callable leela_help(int,const char **);
+int leela_help(int,const char **);
 
 //----------  COMMAND -> FUNCTION TABLE  -----------//
 /*////////////////////////////////////////////////////
@@ -242,7 +241,7 @@ const char *command;	int argc;	callable function;	}list[COMMANDS]={{
 "help",					-1,			leela_help			}};
 //////////////////////////////////////////////////////
 
-callable leela_help(int argc, const char **argv){
+int leela_help(int argc, const char **argv){
 	printf("%s %s\nLICENSE INFO\n\nAvailable commands:\n",argv[0],VERSION);
 	int i;
 	printf("%s",list[0].command);
@@ -282,7 +281,7 @@ PopplerDocument *openPDF(const char *filename) {
 			strcpy(name,"file://");
 			strcat(name,filename);
 	} else {							// no path, no uri
-		path = (char *) getcwd(NULL,0);
+		path = getcwd(NULL,0);
 		name = (char *) malloc(strlen(path) + strlen(filename) + 8);
 		strcpy(name,"file://");
 		strcat(name,path);
