@@ -1,0 +1,60 @@
+.TH LEELA 1
+
+.SH NAME
+LEELA \- CLI frontend for the poppler-glib library of PDF functions
+
+.SH SYNOPSIS
+.B leela
+<command> [command options] <filename|->
+
+.SH DESCRIPTION
+.I  Leela
+aims to provide complete access to the poppler-glib library of pdf functions.  You can split or join PDFs, extract metadata, view annotations, or modify or delete action scripts.  Leela is in active development, new features will be added regularly.
+.I NOTE
+Any command that produces a new pdf as ouput will print the pdf content to stdout.  This output will have to be redirected to a file to be saved.  See examples below.
+
+.SH COMMANDS
+.TP
+.B annot \ \ \ \ \ \ \ 
+View annotations from the input file
+.TP
+.B append <filename|->
+Append the provided filename to the main input file and print the concatenated PDF to stdout.  A dash
+.I -
+may be used to read a file from stdin.
+.TP
+.B data [opt]
+Print out file metadata.  Possibilities for opt include
+title, author, subject, keywords, creator, producer, created, and modified.
+If no
+.I opt
+is provided, the complete unparsed XML metadata will be printed.
+.TP
+.B help \ \ \ \ \ \ 
+Print out a brief help/usage message.
+.TP
+.B page [num]
+Extract a given page, or pages, from a PDF.  If num is a question mark
+.I ?
+this function will return the page count of the provided file.
+.TP
+.B text \ \ \ \ \ \ 
+Print the text content of a PDF.
+
+.SH EXAMPLES
+.TP
+Print out annotations found on pages 4 and 5 of filename.pdf:
+.B leela page 4 5 filename.pdf | leela annot
+.TP
+Join pages from two pdfs by appending page 3 of one.pdf on to the end of another.pdf:
+.B leela page 3 one.pdf | leela append - another.pdf > new.pdf
+
+.SH "SEE ALSO"
+See github page at
+.I https://github.com/TrilbyWhite/Leela.git
+for further information and the most up-to-date version.  Sumbit bug reports on the github page.
+
+.SH "KNOWN ISSUES"
+.B Leela
+does not yet consistently handle fonts properly.
+

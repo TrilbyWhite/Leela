@@ -1,3 +1,21 @@
+/********************************************************************\
+ Leela - a CLI frontend for the poppler-glib libary of PDF tools
+ Copyright (C) 2012  Jesse McClure
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+\********************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,11 +28,18 @@
 #endif //PS2PDF
 
 #define VERSION		"v0.1"
+#define LICENSE		"  Copyright (C) 2012  Jesse McClure \n\
+This program comes with ABSOLUTELY NO WARRANTY;\n\
+This is free software, and you are welcome to redistribute \n\
+it under the conditions of the GPLv3 license."
+
 #define COMMANDS	7
 #define DATE_FORMAT	"%a %b %d %H:%M"
 
 typedef int (*callable)(int,const char **);
 PopplerDocument *openPDF(const char *);
+
+// TODO: add prefix to temp names, delete all /tmp/PREFIX* files.
 
 // leela_get_page extracts the specified page numbers from
 // the input PDF and pipes them out as a new PDF.
@@ -211,6 +236,7 @@ int leela_get_images(int argc, const char **argv) {
 }
 
 int leela_get_attachment(int argc, const char **argv) {
+fprintf(stderr,"attachment function is in development and is not yet functional\n");
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
 	gboolean has;
 	if (argv[2][0] == '?') {
@@ -242,17 +268,11 @@ const char *command;	int argc;	callable function;	}list[COMMANDS]={{
 //////////////////////////////////////////////////////
 
 int leela_help(int argc, const char **argv){
-	printf("%s %s\nLICENSE INFO\n\nAvailable commands:\n",argv[0],VERSION);
+	printf("%s " VERSION LICENSE "\n\nAvailable commands:\n",argv[0]);
 	int i;
 	printf("%s",list[0].command);
 	for (i = 1; i < COMMANDS; i++) printf(", %s",list[i].command);
-	printf("\nEach command has it's own man page under leela-<command>\n\n");
-	return 0;
-}
-
-// usage prints help and exits depending on the opt code
-int usage(int opt) {
-	if (opt < 0) exit(1);
+	printf("\nSee `man leela` for more information.\n\n");
 	return 0;
 }
 
@@ -303,7 +323,10 @@ int main(int argc, const char **argv) {
 	int i;
 	for (i = 0; i < COMMANDS; i++)
 		if (strncmp(argv[1],list[i].command,4)==0) {
-			if (argc < list[i].argc + 3) usage(-1-i);
+			if (argc < list[i].argc + 3) {
+				fprintf(stderr,"Missing required options.\n%s requires %d additional argument.\n",argv[1],list[i].argc);
+				exit(1);
+			}	
 			list[i].function(argc,argv);
 			match = 1;
 		}
