@@ -8,7 +8,7 @@ arch=('any')
 license=('GPLv3')
 depends=('poppler-glib' 'ghostscript')
 makedepends=('git')
-_gitroot="git://github.com/TrilbyWhite/leela.git"
+_gitroot="git://github.com/TrilbyWhite/Leela.git"
 _gitname="leela"
 
 build() {
