@@ -33,7 +33,6 @@ This program comes with ABSOLUTELY NO WARRANTY;\n\
 This is free software, and you are welcome to redistribute \n\
 it under the conditions of the GPLv3 license."
 
-#define COMMANDS	7
 #define DATE_FORMAT	"%a %b %d %H:%M"
 
 typedef int (*callable)(int,const char **);
@@ -92,8 +91,6 @@ int leela_annots(int argc, const char **argv) {
 			j++;
 			atype = poppler_annot_get_annot_type((PopplerAnnot *)mapping->annot);
 			switch (atype) {
-				case POPPLER_ANNOT_UNKNOWN:
-					printf("<%d,%d:unknown>",j,i+1); break;
 				case POPPLER_ANNOT_FREE_TEXT:
 					printf("<%d,%d:free text>",j,i+1); break;
 				case POPPLER_ANNOT_TEXT:
@@ -144,10 +141,15 @@ int leela_annots(int argc, const char **argv) {
 					printf("<%d,%d:watermark>",j,i+1); break;
 				case POPPLER_ANNOT_3D:
 					printf("<%d,%d:3D>",j,i+1); break;
+				case POPPLER_ANNOT_UNKNOWN:
+					printf("<%d,%d:unknown>",j,i+1); break;
 			}
 			text = poppler_annot_get_contents((PopplerAnnot *)mapping->annot);
-			printf("%s\n",text);
-			g_free(text);
+			if (text != NULL) {
+				printf("%s\n",text);
+				g_free(text);
+			}
+			else printf("\n");
 		}
 		poppler_page_free_annot_mapping(annots);
 	}
@@ -253,9 +255,10 @@ fprintf(stderr,"attachment function is in development and is not yet functional\
 // it can refer to the table
 int leela_help(int,const char **);
 
+#define COMMANDS	7
 //----------  COMMAND -> FUNCTION TABLE  -----------//
 /*////////////////////////////////////////////////////
-COMMAND LINE			MIN PARAMS	FUNCTION TO RUN */	struct{
+COMMAND LINE			MIN PARAMS	FUNCTION TO RUN */	const struct{
 const char *command;	int argc;	callable function;	}list[COMMANDS]={{
 //////////////////////////////////////////////////////
 "page",					1,			leela_get_page		},{

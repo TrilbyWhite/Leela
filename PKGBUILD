@@ -1,14 +1,14 @@
 # Maintainer: "Trilby" <jmcclure [at] cns [dot] umass [dot] edu>
 pkgname=leela-git
 pkgver=20120605
-pkgrel=1
+pkgrel=2
 pkgdesc="CLI frontend to poppler-glib of PDF tools"
 url="http://github.com/TrilbyWhite/leela.git"
 arch=('any')
 license=('GPLv3')
 depends=('poppler-glib' 'ghostscript')
 makedepends=('git')
-_gitroot="git://github.com/TrilbyWhite/leela.git"
+_gitroot="git://github.com/TrilbyWhite/Leela.git"
 _gitname="leela"
 
 build() {
@@ -30,5 +30,5 @@ build() {
 
 package() {
 	cd "$srcdir/$_gitname-build"
-	make DESTDIR="$pkgdir/" install
+	make DESTDIR="$pkgdir" install
 } 
