@@ -280,7 +280,7 @@ int leela_help(int argc, const char **argv){
 }
 
 PopplerDocument *openPDF(const char *filename) {
-	char *name=NULL, *path;
+	char *name=NULL, *path=NULL;
 	int c;
 	FILE *tmpfile;
 	if ( (filename[0]=='-') && (filename[1]=='\0') ) {
@@ -304,13 +304,12 @@ PopplerDocument *openPDF(const char *filename) {
 			strcpy(name,"file://");
 			strcat(name,filename);
 	} else {							// no path, no uri
-		path = getcwd(NULL,0);
-		name = (char *) malloc(strlen(path) + strlen(filename) + 8);
+		path = getenv("PWD");
+		name = (char *) malloc(strlen(path) + strlen(filename) + 10);
 		strcpy(name,"file://");
 		strcat(name,path);
 		strcat(name,"/");
 		strcat(name,filename);
-		free(path);
 	}
 	PopplerDocument *PDF =  poppler_document_new_from_file(name,NULL,NULL);
 	free(name);
