@@ -13,7 +13,7 @@ strip: ${OUT}
 
 install: ${OUT}
 	@install -Dm755 leela ${DESTDIR}${PREFIX}/bin/leela
-	@install -Dm666 leela.1.gz ${DESTDIR}${MANDIR}/man1/leela.1.gz
+	@install -Dm644 leela.1.gz ${DESTDIR}${MANDIR}/man1/leela.1.gz
 
 clean:
 	@rm leela leela.1.gz
