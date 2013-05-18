@@ -1,3 +1,0 @@
-#!/bin/bash
-
-luakit file:///usr/share/gtk-doc/html/poppler/index.html &
