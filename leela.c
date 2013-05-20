@@ -320,7 +320,7 @@ PopplerDocument *openPDF(const char *filename) {
 // passes control on to the appropriate function.
 int main(int argc, const char **argv) {
 	if (argc < 2) exit(1);
-	g_type_init();
+	//g_type_init();
 	int match;
 	int i;
 	for (i = 0; i < COMMANDS; i++)
