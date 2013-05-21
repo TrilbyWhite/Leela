@@ -72,84 +72,98 @@ int leela_get_page(int argc, const char **argv) {
 	return 0;
 }
 
+static const char *atypes[] = {
+	[POPPLER_ANNOT_FREE_TEXT]		= "free text",
+	[POPPLER_ANNOT_TEXT]			= "text",
+	[POPPLER_ANNOT_LINK]			= "link",
+	[POPPLER_ANNOT_LINE]			= "line",
+	[POPPLER_ANNOT_SQUARE]			= "square",
+	[POPPLER_ANNOT_CIRCLE]			= "circle",
+	[POPPLER_ANNOT_POLYGON]			= "polygon",
+	[POPPLER_ANNOT_POLY_LINE]		= "polyline",
+	[POPPLER_ANNOT_HIGHLIGHT]		= "highlight",
+	[POPPLER_ANNOT_UNDERLINE]		= "underline",
+	[POPPLER_ANNOT_SQUIGGLY]		= "squiggly",
+	[POPPLER_ANNOT_STRIKE_OUT]		= "strikeout",
+	[POPPLER_ANNOT_STAMP]			= "stamp",
+	[POPPLER_ANNOT_CARET]			= "caret",
+	[POPPLER_ANNOT_INK]				= "ink",
+	[POPPLER_ANNOT_POPUP]			= "popup",
+	[POPPLER_ANNOT_FILE_ATTACHMENT]	= "file",
+	[POPPLER_ANNOT_SOUND]			= "sound",
+	[POPPLER_ANNOT_MOVIE]			= "movie",
+	[POPPLER_ANNOT_WIDGET]			= "widget",
+	[POPPLER_ANNOT_SCREEN]			= "screen",
+	[POPPLER_ANNOT_PRINTER_MARK]	= "mark",
+	[POPPLER_ANNOT_TRAP_NET]		= "trap net",
+	[POPPLER_ANNOT_WATERMARK]		= "watermark",
+	[POPPLER_ANNOT_3D]				= "3D",
+	[POPPLER_ANNOT_UNKNOWN]			= "unknown",
+};
+
 // leela_annots extracts annotations from a PDF
 int leela_annots(int argc, const char **argv) {
 	// currently text only
 	PopplerDocument *PDF = openPDF(argv[argc-1]);
 	PopplerPage *page;
+	PopplerColor *col;
+	PopplerRectangle *rect;
+	PopplerAnnot *annot;
 	GList *annots, *list;
-	gchar *text=NULL;
-	PopplerAnnotMapping *mapping;
+	gchar *text;
 	int i,j;
 	for (i = 0; i < poppler_document_get_n_pages(PDF); i++) {
 		page = poppler_document_get_page(PDF,i);
 		annots = poppler_page_get_annot_mapping(page);
-		j=0;
-		PopplerAnnotType atype;
-		for (list = annots; list; list = list->next) {
-			mapping = (PopplerAnnotMapping *)list->data;
-			j++;
-			atype = poppler_annot_get_annot_type((PopplerAnnot *)mapping->annot);
-			switch (atype) {
-				case POPPLER_ANNOT_FREE_TEXT:
-					printf("<%d,%d:free text>",j,i+1); break;
-				case POPPLER_ANNOT_TEXT:
-					printf("<%d,%d:text>",j,i+1); break;
-				case POPPLER_ANNOT_LINK:
-					printf("<%d,%d:link>",j,i+1); break;
-				case POPPLER_ANNOT_LINE:
-					printf("<%d,%d:line>",j,i+1); break;
-				case POPPLER_ANNOT_SQUARE:
-					printf("<%d,%d:square>",j,i+1); break;
-				case POPPLER_ANNOT_CIRCLE:
-					printf("<%d,%d:circle>",j,i+1); break;
-				case POPPLER_ANNOT_POLYGON:
-					printf("<%d,%d:polygon>",j,i+1); break;
-				case POPPLER_ANNOT_POLY_LINE:
-					printf("<%d,%d:polyline>",j,i+1); break;
-				case POPPLER_ANNOT_HIGHLIGHT:
-					printf("<%d,%d:highlight>",j,i+1); break;
-				case POPPLER_ANNOT_UNDERLINE:
-					printf("<%d,%d:underline>",j,i+1); break;
-				case POPPLER_ANNOT_SQUIGGLY:
-					printf("<%d,%d:squiggly>",j,i+1); break;
-				case POPPLER_ANNOT_STRIKE_OUT:
-					printf("<%d,%d:strikeout>",j,i+1); break;
-				case POPPLER_ANNOT_STAMP:
-					printf("<%d,%d:stamp>",j,i+1); break;
-				case POPPLER_ANNOT_CARET:
-					printf("<%d,%d:caret>",j,i+1); break;
-				case POPPLER_ANNOT_INK:
-					printf("<%d,%d:ink>",j,i+1); break;
-				case POPPLER_ANNOT_POPUP:
-					printf("<%d,%d:popup>",j,i+1); break;
-				case POPPLER_ANNOT_FILE_ATTACHMENT:
-					printf("<%d,%d:file>",j,i+1); break;
-				case POPPLER_ANNOT_SOUND:
-					printf("<%d,%d:sound>",j,i+1); break;
-				case POPPLER_ANNOT_MOVIE:
-					printf("<%d,%d:movie>",j,i+1); break;
-				case POPPLER_ANNOT_WIDGET:
-					printf("<%d,%d:widget>",j,i+1); break;
-				case POPPLER_ANNOT_SCREEN:
-					printf("<%d,%d:screen>",j,i+1); break;
-				case POPPLER_ANNOT_PRINTER_MARK:
-					printf("<%d,%d:mark>",j,i+1); break;
-				case POPPLER_ANNOT_TRAP_NET:
-					printf("<%d,%d:trap net>",j,i+1); break;
-				case POPPLER_ANNOT_WATERMARK:
-					printf("<%d,%d:watermark>",j,i+1); break;
-				case POPPLER_ANNOT_3D:
-					printf("<%d,%d:3D>",j,i+1); break;
-				case POPPLER_ANNOT_UNKNOWN:
-					printf("<%d,%d:unknown>",j,i+1); break;
-			}
-			text = poppler_annot_get_contents((PopplerAnnot *)mapping->annot);
-			if (text != NULL) {
-				printf("%s\n",text);
+		for (list = annots, j=0; list; list = list->next, j++) {
+			rect = &((PopplerAnnotMapping *)list->data)->area;
+			annot = ((PopplerAnnotMapping *)list->data)->annot;
+			printf("<annot page=\"%d\" index=\"%d\" type=\"%s\">\n"
+					"  <rect x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\"/>\n",
+					i,j,atypes[	poppler_annot_get_annot_type(annot)],
+					rect->x1,rect->y1,rect->x2,rect->y2);
+			if ( (text=poppler_annot_get_name(annot)) ) {
+				printf("  <name>%s</name>\n",text);
 				g_free(text);
 			}
-			else printf("\n");
+			if ( (col=poppler_annot_get_color(annot)) ) {
+				printf("  <color r=\"%d\" g=\"%d\" b=\"%d\"/>\n",
+						col->red,col->green,col->blue);
+				g_free(col);
+			}
+			if (POPPLER_IS_ANNOT_TEXT(annot)) {
+				PopplerAnnotText *atext = (PopplerAnnotText *) annot;
+			}
+			if (POPPLER_IS_ANNOT_FREE_TEXT(annot)) {
+				PopplerAnnotFreeText *ftext = (PopplerAnnotFreeText *) annot;
+			}
+			if (POPPLER_IS_ANNOT_FILE_ATTACHMENT(annot)) {
+				PopplerAnnotFileAttachment *file = 
+						(PopplerAnnotFileAttachment *) annot;
+			}
+			if (POPPLER_IS_ANNOT_MOVIE(annot)) {
+				PopplerAnnotMovie *mov = (PopplerAnnotMovie *) annot;
+			}
+			if (POPPLER_IS_ANNOT_SCREEN(annot)) {
+				PopplerAnnotScreen *scr = (PopplerAnnotScreen *) annot;
+			}
+			if (POPPLER_IS_ANNOT_MARKUP(annot)) {
+				PopplerAnnotMarkup *mark = (PopplerAnnotMarkup *) annot;
+				if ( (text=poppler_annot_markup_get_label(mark)) ) {
+					printf("  <label>%s</label>\n",text);
+					g_free(text);
+				}
+				if ( (text=poppler_annot_markup_get_subject(mark)) ) {
+					printf("  <subject>%s</subject>\n",text);
+					g_free(text);
+				}
+				printf("  </markup>\n");
+			}
+			if ( (text=poppler_annot_get_contents(annot)) ) {
+				printf("  <text>%s</text>\n",text);
+				g_free(text);
+			}
+			printf("</annot>\n");
 		}
 		poppler_page_free_annot_mapping(annots);
 	}
