@@ -5,25 +5,26 @@ LEELA \- CLI frontend for the poppler-glib library of PDF functions
 
 .SH SYNOPSIS
 .B leela
-<command> [command options] <filename|->
+[<options>] <command> [<pages>] <filename> [<opt|outfile>]
 
 .SH DESCRIPTION
 .I  Leela
-aims to provide complete access to the poppler-glib library of pdf functions.  You can split or join PDFs, extract metadata, view annotations, or modify or delete action scripts.  Leela is in active development, new features will be added regularly.
-.I NOTE
-Any command that produces a new pdf as ouput will print the pdf content to stdout.  This output will have to be redirected to a file to be saved.  See examples below.
+aims to provide complete access to the poppler library of pdf functions.  You can split or join PDFs, extract metadata, view annotations, or modify or delete action scripts.  Leela is in active development, new features will be added regularly.
+
+.SH OPTIONS
+.TP
+.B \-vN
+Specify a pdf version number (not yet implemented)
 
 .SH COMMANDS
 .TP
-.B annot \ \ \ \ \ \ \ 
-View annotations from the input file
+.B annotations \ \ \ \ \ \ \ 
+extract annotations from the input file and write to stdout or outfile
 .TP
-.B append <filename|->
-Append the provided filename to the main input file and print the concatenated PDF to stdout.  A dash
-.I -
-may be used to read a file from stdin.
+.B append
+Append the filename to the outfile.
 .TP
-.B data [opt]
+.B data
 Print out file metadata.  Possibilities for opt include
 title, author, subject, keywords, creator, producer, created, and modified.
 If no
@@ -33,28 +34,27 @@ is provided, the complete unparsed XML metadata will be printed.
 .B help \ \ \ \ \ \ 
 Print out a brief help/usage message.
 .TP
-.B page [num]
-Extract a given page, or pages, from a PDF.  If num is a question mark
-.I ?
+.B pages
+Extract given page, or pages, from a PDF.  If the page rage is not specified
 this function will return the page count of the provided file.
 .TP
 .B text \ \ \ \ \ \ 
 Print the text content of a PDF.
 
+.SH PAGES
+Pages may optionally be specified.  With no page range specified the command acts on the full document.  Page ranges are specified as a list of numbers between square brackets all separated by spaces.  Shell functions can be used to produce ranges e.g. [ {1..6} ]
+
 .SH EXAMPLES
 .TP
 Print out annotations found on pages 4 and 5 of filename.pdf:
-.B leela page 4 5 filename.pdf | leela annot
+.B leela annotations [ 4 5 ] filename.pdf
 .TP
 Join pages from two pdfs by appending page 3 of one.pdf on to the end of another.pdf:
-.B leela page 3 one.pdf | leela append - another.pdf > new.pdf
+.B leela append 3 one.pdf another.pdf
 
 .SH "SEE ALSO"
 See github page at
 .I https://github.com/TrilbyWhite/Leela.git
 for further information and the most up-to-date version.  Sumbit bug reports on the github page.
 
-.SH "KNOWN ISSUES"
-.B Leela
-does not yet consistently handle fonts properly.
 

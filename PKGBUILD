@@ -16,8 +16,7 @@ _gitname="Leela"
 
 pkgver() {
 	cd "$_gitname"
-    # use the total number of commits + SHA-1 (first 7 characters) of the last commit
-    echo $(git rev-list --count HEAD).$(git rev-parse --short HEAD)
+    echo "0.$(git rev-list --count HEAD).$(git describe --always )"
 }
 
 build() {

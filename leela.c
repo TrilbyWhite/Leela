@@ -21,56 +21,21 @@
 #include <string.h>
 #include <unistd.h>
 #include <poppler.h>
+#include <cairo.h>
+#include <cairo-pdf.h>
 
-#ifndef PS2PDF
-#define PS2PDF "gs -P- -dSAFER -q -P- -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sstdout=%%stderr -sOutputFile=- -P- -dSAFER -c .setpdfwrite -f %s"
-#define PS2PDFLEN	135
-#endif //PS2PDF
+typedef struct {
+	int *pages;
+	int npages;
+	PopplerDocument *pdf;
+	const char *out;
+} Options;
 
-#define VERSION		"v0.1"
-#define LICENSE		"  Copyright (C) 2012  Jesse McClure \n\
-This program comes with ABSOLUTELY NO WARRANTY;\n\
-This is free software, and you are welcome to redistribute \n\
-it under the conditions of the GPLv3 license."
-
-#define DATE_FORMAT	"%a %b %d %H:%M"
-
-typedef int (*callable)(int,const char **);
-PopplerDocument *openPDF(const char *);
-
-// TODO: add prefix to temp names, delete all /tmp/PREFIX* files.
-
-// leela_get_page extracts the specified page numbers from
-// the input PDF and pipes them out as a new PDF.
-// leela_get_page allows for commands to be strung together
-// in order to restrict on which pages a command is run, eg:
-// $ leela page 1 myPDF.pdf | leela annots -
-int leela_get_page(int argc, const char **argv) {
-	PopplerDocument *PDF = openPDF(argv[argc-1]);
-	// check page count:
-	if (argv[2][0] == '?') {
-		printf("%d\n",poppler_document_get_n_pages(PDF));
-		return 0;
-	}
-	// create temp ps file:
-	char *tmpPS=NULL;
-	tmpPS = (char *) malloc(L_tmpnam);
-	tmpnam(tmpPS);
-	PopplerPSFile *ps = poppler_ps_file_new(PDF,tmpPS,0,argc-3);
-	// loop through pages and render them to the ps file:
-	int i,p;
-	for (i = 2; i < argc - 1; i++) {
-		sscanf(argv[i],"%d",&p);
-		poppler_page_render_to_ps(poppler_document_get_page(PDF,p-1),ps);
-	}
-	poppler_ps_file_free(ps);
-	char *command;
-	command = (char *) malloc(PS2PDFLEN + 20);
-	sprintf(command,PS2PDF,tmpPS);
-	free(tmpPS);
-	system(command);
-	return 0;
-}
+typedef struct {
+	const char *name;
+	void (*func) (Options *);
+	const char *description;
+} Command;
 
 static const char *atypes[] = {
 	[POPPLER_ANNOT_FREE_TEXT]		= "free text",
@@ -101,10 +66,41 @@ static const char *atypes[] = {
 	[POPPLER_ANNOT_UNKNOWN]			= "unknown",
 };
 
-// leela_annots extracts annotations from a PDF
-int leela_annots(int argc, const char **argv) {
-	// currently text only
-	PopplerDocument *PDF = openPDF(argv[argc-1]);
+static void leela_annot(Options *);
+static void leela_append(Options *);
+static void leela_attachment(Options *);
+static void leela_data(Options *);
+static void leela_help(Options *);
+static void leela_images(Options *);
+static void leela_pages(Options *);
+static void leela_render(Options *);
+static void leela_shrink(Options *);
+static void leela_text(Options *);
+static PopplerDocument *open_pdf(const char *);
+static Command command[] = {
+	{ "annots",			leela_annot,
+		"extract annotations in an xml format"	},
+	{ "append",			leela_append,
+		"append pages from input onto output"	},
+	{ "attachments",	leela_attachment,
+		"extract attacments from input into outputXXX [EXPERIMENTAL]" },
+	{ "data",			leela_data,
+		"display data about pdf"				},
+	{ "help",			leela_help,
+		"show this help menu and exit"			},
+	{ "images",			leela_images,
+		"extract images from input into output" },
+	{ "pages",			leela_pages,
+		"extract pages from input into output"	},
+	{ "render",			leela_render,
+		"render annotations onto output [EXPERIMENTAL]"		},
+	{ "shrink",			leela_shrink,
+		"render for screen, often reduces file size"},
+	{ "text",			leela_text,
+		"extract text of pdf file"				},
+};
+
+void leela_annot(Options *opt) {
 	PopplerPage *page;
 	PopplerColor *col;
 	PopplerRectangle *rect;
@@ -112,8 +108,8 @@ int leela_annots(int argc, const char **argv) {
 	GList *annots, *list;
 	gchar *text;
 	int i,j;
-	for (i = 0; i < poppler_document_get_n_pages(PDF); i++) {
-		page = poppler_document_get_page(PDF,i);
+	for (i = 0; i < opt->npages; i++) {
+		page = poppler_document_get_page(opt->pdf,opt->pages[i]);
 		annots = poppler_page_get_annot_mapping(page);
 		for (list = annots, j=0; list; list = list->next, j++) {
 			rect = &((PopplerAnnotMapping *)list->data)->area;
@@ -167,197 +163,259 @@ int leela_annots(int argc, const char **argv) {
 		}
 		poppler_page_free_annot_mapping(annots);
 	}
-	return 0;
+	return;
 }
 
-int leela_text(int argc, const char **argv) {
-	PopplerDocument *PDF = openPDF(argv[argc-1]);
-	char *text;
-	int i;
-	for (i = 0; i < poppler_document_get_n_pages(PDF); i++) {
-		//page = poppler_document_get_page(PDF,i);
-		text = poppler_page_get_text(poppler_document_get_page(PDF,i));
-		printf("%s\n",text);
+void leela_append(Options *opt) {
+	double pdfw,pdfh;
+	char tmpPDF[] = "file:///tmp/leela_XXXXXX";
+	mktemp(tmpPDF);
+	PopplerDocument *base = open_pdf(opt->out);
+	poppler_document_save_a_copy(base,tmpPDF,NULL);
+	base = open_pdf(tmpPDF+7);
+	PopplerPage *page = poppler_document_get_page(base,0);
+	poppler_page_get_size(page,&pdfw,&pdfh);
+	cairo_surface_t *t = cairo_pdf_surface_create(opt->out,pdfw,pdfh);
+	cairo_t *c = cairo_create(t);
+	cairo_surface_destroy(t);
+	/* loop through pages and render them to the out file */
+	int i, nbase = poppler_document_get_n_pages(base);
+	for (i = 0; i < nbase; i++) {
+		page = poppler_document_get_page(base,i);
+		poppler_page_get_size(page,&pdfw,&pdfh);
+		//cairo_pdf_surface_set_size(t,pdfw,pdfh);
+		poppler_page_render(page,c);
+		cairo_show_page(c);
 	}
-	return 0;
+	page = poppler_document_get_page(opt->pdf,0);
+	poppler_page_get_size(page,&pdfw,&pdfh);
+	/* loop through pages and render them to the out file */
+	for (i = 0; i < opt->npages; i++) {
+		page = poppler_document_get_page(opt->pdf,opt->pages[i]);
+		poppler_page_get_size(page,&pdfw,&pdfh);
+		//cairo_pdf_surface_set_size(t,pdfw,pdfh);
+		poppler_page_render(page,c);
+		cairo_show_page(c);
+	}
+	cairo_destroy(c);
+	remove(tmpPDF+7);
 }
 
-// leela_append adds one PDF to the end of the other
-int leela_append(int argc, const char **argv) {
-	PopplerDocument *PDF = openPDF(argv[argc-1]);
-	PopplerDocument *append = openPDF(argv[2]);
-	int pgs1 = poppler_document_get_n_pages(PDF);
-	int pgs2 = poppler_document_get_n_pages(append);
-	// create temp ps files:
-	char *tmp1=NULL;
-	char *tmp2=NULL;
-	tmp1 = (char *) malloc(L_tmpnam);
-	tmp2 = (char *) malloc(L_tmpnam);
-	tmpnam(tmp1);
-	tmpnam(tmp2);
-	// loop through pages and render them to the ps file:
+void leela_attachment(Options *opt) {
 	int i;
-	PopplerPSFile *ps = poppler_ps_file_new(PDF,tmp1,0,pgs1);
-	for (i = 0; i < pgs1; i++)
-		poppler_page_render_to_ps(poppler_document_get_page(PDF,i),ps);
-	poppler_ps_file_free(ps);
-	ps = poppler_ps_file_new(append,tmp2,0,pgs2);
-	for (i = 0; i < pgs2; i++)
-		poppler_page_render_to_ps(poppler_document_get_page(append,i),ps);
-	poppler_ps_file_free(ps);
-	char *command;
-	command = (char *) malloc(PS2PDFLEN + 40);
-	sprintf(command,PS2PDF " %s",tmp1,tmp2);
-	free(tmp1);free(tmp2);
-	system(command);
-	return 0;
+	GList *list = poppler_document_get_attachments(opt->pdf);
+	PopplerAttachment *att;
+	char *fname = (char *) calloc(strlen(opt->out)+6,sizeof(char));
+	strcpy(fname,opt->out);
+	char *c = fname + strlen(opt->out);
+	for (i = 0; list; i++, list = list->next) {
+		att =  (PopplerAttachment *)list->data;
+		snprintf(c,5,"%03d",i);
+		poppler_attachment_save(att,fname,NULL);
+	}
+	free(fname);
+	g_list_free(list);
 }
 
-int leela_get_metadata(int argc, const char **argv) {
-	PopplerDocument *PDF = openPDF(argv[argc-1]);
+void leela_data(Options *opt) {
 	gchar *data=NULL;
-	time_t when;
-	if (argc == 3)
-		data = poppler_document_get_metadata(PDF);
-	else if (strncmp(argv[2],"title",5)==0)
-		data = poppler_document_get_title(PDF);
-	else if (strncmp(argv[2],"author",6)==0)
-		data = poppler_document_get_author(PDF);
-	else if (strncmp(argv[2],"subject",7)==0)
-		data = poppler_document_get_subject(PDF);
-	else if (strncmp(argv[2],"keywords",7)==0)
-		data = poppler_document_get_keywords(PDF);
-	else if (strncmp(argv[2],"creator",7)==0)
-		data = poppler_document_get_creator(PDF);
-	else if (strncmp(argv[2],"producer",6)==0)
-		data = poppler_document_get_producer(PDF);
-	else if (strncmp(argv[2],"created",7)==0)
-		when = poppler_document_get_creation_date(PDF);
-	else if (strncmp(argv[2],"modified",5)==0)
-		when = poppler_document_get_modification_date(PDF);
+	time_t when = 0;
+	if (!opt->out)
+		data = poppler_document_get_metadata(opt->pdf);
+	else if (strncmp(opt->out,"title",5)==0)
+		data = poppler_document_get_title(opt->pdf);
+	else if (strncmp(opt->out,"author",6)==0)
+		data = poppler_document_get_author(opt->pdf);
+	else if (strncmp(opt->out,"subject",7)==0)
+		data = poppler_document_get_subject(opt->pdf);
+	else if (strncmp(opt->out,"keywords",7)==0)
+		data = poppler_document_get_keywords(opt->pdf);
+	else if (strncmp(opt->out,"creator",7)==0)
+		data = poppler_document_get_creator(opt->pdf);
+	else if (strncmp(opt->out,"producer",6)==0)
+		data = poppler_document_get_producer(opt->pdf);
+	else if (strncmp(opt->out,"created",7)==0)
+		when = poppler_document_get_creation_date(opt->pdf);
+	else if (strncmp(opt->out,"modified",5)==0)
+		when = poppler_document_get_modification_date(opt->pdf);
 	else
-		return 1;
-	if (data == NULL) {
+		return;
+	if (when) {
 		data = (gchar *) malloc(30);
-		strftime(data,28,DATE_FORMAT,localtime(&when));
+		strftime(data,28,"%a %b %d %H:%M",localtime(&when));
 	}
-	printf("%s\n",data);
-	g_free(data);
-	return 0;
-}
-
-int leela_get_images(int argc, const char **argv) {
-	// get all images and send list to stdout?
-	return 0;
-}
-
-int leela_get_attachment(int argc, const char **argv) {
-fprintf(stderr,"attachment function is in development and is not yet functional\n");
-	PopplerDocument *PDF = openPDF(argv[argc-1]);
-	gboolean has;
-	if (argv[2][0] == '?') {
-		has = poppler_document_has_attachments(PDF);
-		if (has == TRUE) printf("Yes\n");
-		else printf("No\n");
-		return 0;
+	if (data) {
+		printf("%s\n",data);
+		g_free(data);
 	}
-	// TODO: read attachments.
-	return 0;
 }
 
-// leela_help is defined below the command table so
-// it can refer to the table
-int leela_help(int,const char **);
-
-#define COMMANDS	7
-//----------  COMMAND -> FUNCTION TABLE  -----------//
-/*////////////////////////////////////////////////////
-COMMAND LINE			MIN PARAMS	FUNCTION TO RUN */	const struct{
-const char *command;	int argc;	callable function;	}list[COMMANDS]={{
-//////////////////////////////////////////////////////
-"page",					1,			leela_get_page		},{
-"annots",				0,			leela_annots		},{
-"append",				1,			leela_append		},{
-"data",					0,			leela_get_metadata	},{
-"attachment",			1,			leela_get_attachment},{
-"text",					0,			leela_text			},{
-"help",					-1,			leela_help			}};
-//////////////////////////////////////////////////////
-
-int leela_help(int argc, const char **argv){
-	printf("%s " VERSION LICENSE "\n\nAvailable commands:\n",argv[0]);
+void leela_help(Options *opt) {
 	int i;
-	printf("%s",list[0].command);
-	for (i = 1; i < COMMANDS; i++) printf(", %s",list[i].command);
+	printf(
+"Leela v0.3 Copyright (C) 2012-2013  Jesse McClure\n"
+"This program comes with ABSOLUTELY NO WARRANTY\n"
+"This is free software, and you are welcome to redistribute\n"
+"it under the conditions of the GPLv3 license.\n\n"
+"USAGE: leela command [ n1 n2 ... nN ] pdf output\n"
+"  command     command from the list below\n"
+"  n1...nN     range of pages to act on (defaul=all)\n"
+"  pdf         filename of input pdf file\n"
+"  output      select output type or filename\n\n"
+"COMMANDS:\n");
+	for (i = 0; i < sizeof(command)/sizeof(command[0]); i++)
+		printf("  %-11s %s\n",command[i].name,command[i].description);
 	printf("\nSee `man leela` for more information.\n\n");
-	return 0;
+	exit(0);
 }
 
-PopplerDocument *openPDF(const char *filename) {
-	char *name=NULL, *path=NULL;
-	int c;
-	FILE *tmpfile;
-	if ( (filename[0]=='-') && (filename[1]=='\0') ) {
-		name = (char *) malloc(L_tmpnam);
-		tmpnam(name);
-		tmpfile = fopen(name,"w");
-		while ( (c=getc(stdin)) != EOF )
-			fputc(c,tmpfile);
-		fclose(tmpfile);
-		return openPDF(name);
-	}
-	// parse filename and expand to URL if needed	
-	if ((	strncmp(filename,"http:",5)==0) ||	// full uri
-			(strncmp(filename,"file:",5)==0) ||
-			(strncmp(filename,"https:",6)==0)) {
-		name = (char *) malloc(strlen(filename) + 1);
-		strcpy(name,filename);
-	}
-	else if (filename[0] == '/') {	// full path but not uri
-			name = (char *) malloc(strlen(filename) + 8);
-			strcpy(name,"file://");
-			strcat(name,filename);
-	} else {							// no path, no uri
-		path = getenv("PWD");
-		name = (char *) malloc(strlen(path) + strlen(filename) + 10);
-		strcpy(name,"file://");
-		strcat(name,path);
-		strcat(name,"/");
-		strcat(name,filename);
-	}
-	PopplerDocument *PDF =  poppler_document_new_from_file(name,NULL,NULL);
-	free(name);
-	return PDF;
-}
-
-// main does nothing put read the command in argv[1] and
-// passes control on to the appropriate function.
-int main(int argc, const char **argv) {
-	if (argc < 2) exit(1);
-	//g_type_init();
-	int match;
-	int i;
-	for (i = 0; i < COMMANDS; i++)
-		if (strncmp(argv[1],list[i].command,4)==0) {
-			if (argc < list[i].argc + 3) {
-				fprintf(stderr,"Missing required options.\n%s requires %d additional argument.\n",argv[1],list[i].argc);
-				exit(1);
-			}	
-			list[i].function(argc,argv);
-			match = 1;
+void leela_images(Options *opt) {
+	PopplerPage *page;
+	PopplerRectangle *rect;
+	GList *images, *list;
+	gint img_id = 0;
+	cairo_surface_t *img;
+	cairo_surface_t *t = cairo_pdf_surface_create(opt->out,10,10);
+	cairo_t *c = cairo_create(t);
+	int i,j;
+	for (i = 0; i < opt->npages; i++) {
+		page = poppler_document_get_page(opt->pdf,opt->pages[i]);
+		images = poppler_page_get_image_mapping(page);
+		for (list = images, j=0; list; list = list->next, j++) {
+			rect = &((PopplerImageMapping *)list->data)->area;
+			img_id = ((PopplerImageMapping *)list->data)->image_id;
+			img = poppler_page_get_image(page,img_id);
+			cairo_pdf_surface_set_size(t,rect->x2 - rect->x1,rect->y2 - rect->y1);
+			cairo_set_source_surface(c,img,0,0);
+			cairo_paint(c);
+			cairo_show_page(c);
 		}
-	if (match == 1) return 0;
-	if (argv[1][0] == '-') switch (argv[1][1]) {
-		case '?':
-		case 'h': leela_help(argc,argv); return 0;
-		case 'v': printf("%s\n",VERSION); return 0;
-		default:
-			fprintf(stderr,"Unrecognized command line switch \"%s\"\n",argv[1]);
-			return 1;
+		poppler_page_free_image_mapping(images);
 	}
-	fprintf(stderr,"Unrecognized command \"%s\"\ntry '%s help' for help.\n",
-		argv[1],argv[0]);
-	return 1;
+	cairo_surface_destroy(t);
+	cairo_destroy(c);
+	if (!img_id) {
+		printf("no images found.\n");
+		remove(opt->out);
+	}
+}
+
+static void leela_page_render(Options *opt,PopplerPrintFlags p) {
+	double pdfw,pdfh;
+	PopplerPage *page = poppler_document_get_page(opt->pdf,0);
+	poppler_page_get_size(page,&pdfw,&pdfh);
+	cairo_surface_t *t = cairo_pdf_surface_create(opt->out,pdfw,pdfh);
+	cairo_t *c = cairo_create(t);
+	cairo_surface_destroy(t);
+	/* loop through pages and render them to the out file */
+	int i;
+	for (i = 0; i < opt->npages; i++) {
+		page = poppler_document_get_page(opt->pdf,opt->pages[i]);
+		poppler_page_get_size(page,&pdfw,&pdfh);
+		//cairo_pdf_surface_set_size(t,pdfw,pdfh);
+		poppler_page_render_for_printing_with_options(page,c,p);
+		cairo_show_page(c);
+	}
+	cairo_destroy(c);
+}
+
+void leela_pages(Options *opt) {
+	if (!opt->npages)
+		printf("%d\n",poppler_document_get_n_pages(opt->pdf));
+	else
+		leela_page_render(opt,POPPLER_PRINT_DOCUMENT);
+}
+
+void leela_render(Options *opt) {
+	leela_page_render(opt,POPPLER_PRINT_ALL);
+}
+
+void leela_shrink(Options *opt) {
+	double pdfw,pdfh;
+	PopplerPage *page = poppler_document_get_page(opt->pdf,0);
+	poppler_page_get_size(page,&pdfw,&pdfh);
+	cairo_surface_t *t = cairo_pdf_surface_create(opt->out,pdfw,pdfh);
+	cairo_t *c = cairo_create(t);
+	cairo_surface_destroy(t);
+	/* loop through pages and render them to the out file */
+	int i;
+	for (i = 0; i < opt->npages; i++) {
+		page = poppler_document_get_page(opt->pdf,opt->pages[i]);
+		poppler_page_get_size(page,&pdfw,&pdfh);
+		//cairo_pdf_surface_set_size(t,pdfw,pdfh);
+		poppler_page_render(page,c);
+		cairo_show_page(c);
+	}
+	cairo_destroy(c);
+}
+
+void leela_text(Options *opt) {
+	int i;
+	FILE *out = stdout;
+	if (opt->out) out = fopen(opt->out,"w");
+	for (i = 0; i < opt->npages; i++) {
+		fprintf(out,"%s\n", poppler_page_get_text(poppler_document_get_page(
+				opt->pdf,opt->pages[i])) );
+	}
+	if (opt->out) fclose(out);
+	return;
+}
+
+PopplerDocument *open_pdf(const char *arg) {
+	char *fullpath = realpath(arg,NULL);
+	if (!fullpath) {
+		fprintf(stderr,"Cannot find file \"%s\"\n",arg);
+		exit(1);
+	}
+	char *uri = (char *) malloc(strlen(fullpath)+8);
+	strcpy(uri,"file://");
+	strcat(uri,fullpath);
+	free(fullpath);
+	PopplerDocument *pdf = poppler_document_new_from_file(uri,NULL,NULL);
+	free(uri);
+	return pdf;
+}
+
+int range(Options **opt_p,int argc, const char **argv) {
+	Options *opt = *opt_p;
+	int i;
+	for (i = 1; i < argc && argv[i][0] != ']'; i++) {
+		opt->pages = (int *) realloc(opt->pages,i*sizeof(int));
+		opt->pages[i-1] = atoi(argv[i]);
+	}
+	return (opt->npages=i-1)+1;
+}
+
+int range_all(Options **opt_p) {
+	Options *opt = *opt_p;
+	opt->npages = poppler_document_get_n_pages(opt->pdf);
+	int i;
+	opt->pages = (int *) malloc(opt->npages*sizeof(int));
+	for (i = 0; i < opt->npages; i++) opt->pages[i] = i;
+}
+
+int main(int argc, const char **argv) {
+	Options *opt = (Options *) calloc(1,sizeof(Options));
+	if (argc < 3) leela_help(opt);
+	int i;
+	for (i = 2; i < argc; i++) {
+		if (argv[i][0] == '[') i += range(&opt,argc-i,&argv[i]);
+		else if (!opt->pdf) opt->pdf = open_pdf(argv[i]);
+		else if (!opt->out) opt->out = argv[i];
+		else fprintf(stderr,"ignoring unrecognized parameter \"%s\"\n",argv[i]);
+	}
+	if (!opt->npages && strncmp(argv[1],"page",4)) range_all(&opt);
+	int max = poppler_document_get_n_pages(opt->pdf) - 1;
+	for (i = 0; i < opt->npages; i++) {
+		if (opt->pages[i] < 0) opt->pages[i] = 0;
+		if (opt->pages[i] > max) opt->pages[i] = max;
+	}
+	for (i = 0; i < sizeof(command)/sizeof(command[0]); i++)
+		if (strncmp(argv[1],command[i].name,strlen(argv[1]))==0)
+			command[i].func(opt);
+	if (opt->pages) free(opt->pages);
+	free(opt);
+	return 0;
 }
 
 

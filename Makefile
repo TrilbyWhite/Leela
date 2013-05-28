@@ -1,13 +1,13 @@
-OUT		=	leela
-FLAGS	=	`pkg-config --cflags --libs poppler-glib`
+PROG	=	leela
+CFLAGS	+=	-Os `pkg-config --cflags poppler-glib cairo`
+LDFLAGS	+=	`pkg-config --libs poppler-glib cairo`
 PREFIX	?=	/usr
 MANDIR	?=	/usr/share/man
-CC_OPTS =	-Wall -Werror -Wextra -Wno-unused-parameter -Wno-unused-variable
 
-${OUT}: leela.c
-	@gcc ${CC_OPTS} -o leela leela.c ${FLAGS}
+${PROG}: ${PROG}.c
+	@gcc -o ${PROG} ${PROG}.c ${CFLAGS} ${LDFLAGS}
 
-install: ${OUT}
+install: ${PROG}
 	@install -Dm755 leela ${DESTDIR}${PREFIX}/bin/leela
 	@install -Dm644 leela.1 ${DESTDIR}${MANDIR}/man1/leela.1
 
